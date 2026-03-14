@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       zip_name:
-        description: 'Name of the zip file in the repo (e.g., myfiles.zip)'
+        description: 'Name of the zip file (e.g., archive.zip)'
         required: true
         default: 'archive.zip'
 
@@ -18,15 +18,25 @@ jobs:
 
       - name: Delete old files
         run: |
-          # Deletes everything except .git, .github, and the ZIP file itself
+          # Clean everything except essential git/github files and the ZIP
           find . -maxdepth 1 ! -name '.git' ! -name '.github' ! -name '${{ github.event.inputs.zip_name }}' ! -name '.' -exec rm -rf {} +
 
-      - name: Extract and Clean Up
+      - name: Extract and Move Contents
         run: |
-          unzip -o "${{ github.event.inputs.zip_name }}"
+          # 1. Create a temp directory to avoid conflicts
+          mkdir temp_extract
+          unzip -o "${{ github.event.inputs.zip_name }}" -d temp_extract
+          
+          # 2. Move contents of the first subfolder to the root
+          # This handles cases where the ZIP contains one main folder
+          shopt -s dotglob
+          mv temp_extract/*/* . 2>/dev/null || mv temp_extract/* .
+          
+          # 3. Cleanup
+          rm -rf temp_extract
           rm "${{ github.event.inputs.zip_name }}"
 
       - name: Commit and Push changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Full reset: Extracted contents of ${{ github.event.inputs.zip_name }}"
+          commit_message: "Full reset: Extracted contents of ${{ github.event.inputs.zip_name }} to root"
